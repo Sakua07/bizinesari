@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>見積書・請求書作成ツール（税率対応版）</title>
+    <!-- 画面キャプチャ用ライブラリ (html2canvas) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+            --border-color: #cbd5e1;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        main {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        /* タブ切り替えボタンのスタイル */
+        .tab-container {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 0.75rem;
+            font-size: 1rem;
+            font-weight: bold;
+            background: #e2e8f0;
+            color: #475569;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: var(--primary-color);
+            color: #fff;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+        }
+
+        /* 絶対に書き換えるべき場所を警告する一番上の注意書きスタイル */
+        .urgent-warning-box {
+            background: #fef2f2;
+            border: 2px solid #ef4444;
+            padding: 1rem 1.25rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            color: #991b1b;
+            line-height: 1.6;
+        }
+        .urgent-warning-box h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1rem;
+            color: #dc2626;
+        }
+        .urgent-warning-box ul {
+            margin: 0.3rem 0 0 1.2rem;
+            padding: 0;
+            font-size: 0.9rem;
+        }
+        .urgent-warning-box li {
+            margin-bottom: 0.3rem;
+        }
+
+        .guide-box {
+            background: #e2e8f0;
+            padding: 0.75rem 1.0rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            margin-bottom: 1.5rem;
+            color: #334155;
+            line-height: 1.5;
+        }
+
+        .tax-setting-bar {
+            background: #eef2ff;
+            border: 1px solid #c7d2fe;
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.9rem;
+        }
+        .tax-setting-bar input {
+            width: 60px;
+            padding: 0.2rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            text-align: right;
+        }
+
+        /* 用紙のデザイン共通 */
+        .document-sheet {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 2.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            margin-bottom: 1.5rem;
+        }
+
+        .doc-title {
+            text-align: center;
+            font-size: 1.75rem;
+            font-weight: bold;
+            margin-bottom: 2rem;
+            letter-spacing: 0.1em;
+            border-bottom: 2px solid var(--text-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .doc-header-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 2rem;
+            gap: 2rem;
+        }
+
+        .client-info input {
+            font-size: 1.25rem;
+            font-weight: bold;
+            border: 1px dashed transparent;
+            padding: 0.2rem 0.4rem;
+            width: 300px;
+            margin-bottom: 0.5rem;
+        }
+        .client-info input:hover, .client-info input:focus {
+            border-color: var(--border-color);
+            background: #fafafa;
+            outline: none;
+        }
+
+        .company-info {
+            text-align: right;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        .company-info input {
+            text-align: right;
+            border: 1px dashed transparent;
+            padding: 0.1rem 0.3rem;
+            font-size: 0.9rem;
+        }
+        .company-info input:hover, .company-info input:focus {
+            border-color: var(--border-color);
+            background: #fafafa;
+            outline: none;
+        }
+
+        .doc-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 6px;
+        }
+
+        .meta-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .meta-group input {
+            padding: 0.3rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 2rem;
+        }
+
+        .items-table th, .items-table td {
+            border: 1px solid var(--border-color);
+            padding: 0.6rem;
+            font-size: 0.9rem;
+        }
+
+        .items-table th {
+            background-color: #f1f5f9;
+            text-align: center;
+        }
+
+        .items-table input[type="text"] {
+            width: 100%;
+            border: none;
+            background: transparent;
+            font-size: 0.9rem;
+            box-sizing: border-box;
+        }
+        .items-table input[type="text"]:focus {
+            outline: 1px solid var(--primary-color);
+            background: #fff;
+        }
+
+        .items-table input[type="number"] {
+            width: 100%;
+            border: none;
+            background: transparent;
+            font-size: 0.9rem;
+            text-align: right;
+            box-sizing: border-box;
+        }
+        .items-table input[type="number"]:focus {
+            outline: 1px solid var(--primary-color);
+            background: #fff;
+        }
+
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        .total-section {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 2rem;
+        }
+
+        .total-table {
+            width: 380px;
+            border-collapse: collapse;
+        }
+
+        .total-table td {
+            border: 1px solid var(--border-color);
+            padding: 0.6rem 1rem;
+            font-size: 0.95rem;
+        }
+
+        .total-table tr:last-child {
+            font-weight: bold;
+            font-size: 1.1rem;
+            background-color: #eef2ff;
+        }
+
+        .notes-section {
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem;
+        }
+        .notes-section textarea {
+            width: 100%;
+            height: 80px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.5rem;
+            font-family: inherit;
+            font-size: 0.85rem;
+            resize: vertical;
+        }
+
+        .btn {
+            background: var(--primary-color);
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .btn:hover { background: var(--primary-hover); }
+        .btn-secondary { background: #64748b; }
+        .btn-secondary:hover { background: #475569; }
+        .btn-danger { background: #ef4444; padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+        .btn-danger:hover { background: #dc2626; }
+
+        /* 非表示用クラス */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        @media print {
+            body { background: #fff; }
+            header, .tab-container, .urgent-warning-box, .guide-box, .tax-setting-bar, .no-print { display: none !important; }
+            .document-sheet { border: none; box-shadow: none; padding: 0; margin: 0; }
+            .tab-content { display: none !important; }
+            .tab-content.active { display: block !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="no-print">
+        <div class="header-left">見積・請求書作成ツール（税率対応版）</div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="exportJSON()">バックアップ保存</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">復元</button>
+            <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importJSON(this)">
+            <button class="btn" onclick="window.print()">印刷 / PDF保存</button>
+            <button class="btn" onclick="saveAsImage()">画像として保存</button>
+        </div>
+    </header>
+
+    <main>
+        <!-- タブ切り替えボタン -->
+        <div class="tab-container no-print">
+            <button class="tab-btn active" onclick="switchTab('estimate')">見積書を作成する</button>
+            <button class="tab-btn" onclick="switchTab('invoice')">請求書を作成する</button>
+        </div>
+
+        <!-- ================= 1. 見積書タブ ================= -->
+        <div id="estimateTab" class="tab-content active">
+            <div class="urgent-warning-box no-print">
+                <h3>【重要】見積書を発行する前に必ず書き換えてください</h3>
+                <ul>
+                    <li><strong>見積番号（初期値：EST-001）：</strong> 新しい見積書を作るたびに数字を1つずつ増やしてください（例：1枚目 <code>EST-001</code> / 2枚目 <code>EST-002</code>）。</li>
+                    <li><strong>登録番号（初期値：T1234567890123）：</strong> ご自身の<strong>インボイス登録番号（T+13桁）</strong>に書き換えてください（免税事業者の場合は行ごと削除）。</li>
+                    <li><strong>発行日：</strong> 開いた日の日付が自動で入りますが、必要に応じて確認してください。</li>
+                </ul>
+            </div>
+
+            <div class="guide-box no-print">
+                <strong>税率変更・法改正への対応:</strong> 上部の「基本消費税率」を変更すると、すべての税額計算が自動で連動します。また、明細ごとに「対象外（非課税）」にチェックを入れることも可能です。
+            </div>
+
+            <div class="tax-setting-bar no-print">
+                <label><strong>基本消費税率:</strong></label>
+                <input type="number" id="globalTaxRate" value="10" min="0" max="100" step="1" oninput="renderAll()"> ％
+                <span style="color: #64748b; font-size: 0.85rem;">（共通の消費税率）</span>
+            </div>
+
+            <div id="printArea" class="document-sheet">
+                <div class="doc-title">御 見 積 書</div>
+
+                <div class="doc-header-info">
+                    <div class="client-info">
+                        <input type="text" id="estClientName" value="〇〇株式会社 御中" placeholder="宛先（クライアント名）">
+                        <p style="font-size: 0.85rem; color: #64748b; margin: 0.3rem 0 0 0;">下記のとおりお見積もり申し上げます。</p>
+                    </div>
+                    <div class="company-info">
+                        <div><input type="text" id="estIssueDate" value=""></div>
+                        <div><input type="text" id="estNo" value="見積番号: EST-001"></div>
+                        <div style="margin-top: 0.5rem; font-weight: bold;"><input type="text" id="estMyCompanyName" value="あなたの会社名 / 屋号"></div>
+                        <div><input type="text" id="estMyAddress" value="東京都〇〇区〇〇 1-2-3"></div>
+                        <div><input type="text" id="estMyRegNumber" value="登録番号: T1234567890123 (インボイス)"></div>
+                    </div>
+                </div>
+
+                <div class="doc-meta">
+                    <div class="meta-group">
+                        <label style="font-size: 0.8rem; color: #64748b;">件名（プロジェクト名）</label>
+                        <input type="text" id="estSubject" value="WEBデザイン・システム開発一式" style="width: 250px;">
+                    </div>
+                    <div class="meta-group">
+                        <label style="font-size: 0.8rem; color: #64748b;">有効期限</label>
+                        <input type="text" id="estValid" value="発行日より30日間" style="width: 150px;">
+                    </div>
+                    <div class="meta-group">
+                        <label style="font-size: 0.8rem; color: #64748b;">納期・支払条件</label>
+                        <input type="text" id="estTerm" value="月末締め翌月末払い" style="width: 150px;">
+                    </div>
+                </div>
+
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">摘要（品名・内容）</th>
+                            <th style="width: 8%;">数量</th>
+                            <th style="width: 8%;">単位</th>
+                            <th style="width: 15%;">単価 (円)</th>
+                            <th style="width: 14%;">金額 (円)</th>
+                            <th style="width: 10%;" class="no-print">対象外</th>
+                            <th class="no-print" style="width: 5%;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="estItemsBody">
+                        <!-- 動的生成 -->
+                    </tbody>
+                </table>
+
+                <div class="no-print" style="margin-bottom: 2rem;">
+                    <button class="btn" onclick="addItem('estimate')">＋ 明細行を追加</button>
+                </div>
+
+                <div class="total-section">
+                    <table class="total-table">
+                        <tr>
+                            <td id="estTaxableSubtotalLabel">対象小計 (税抜)</td>
+                            <td id="estSubtotalView" class="text-right">¥0</td>
+                        </tr>
+                        <tr>
+                            <td id="estTaxLabel">消費税 (10%)</td>
+                            <td id="estTaxView" class="text-right">¥0</td>
+                        </tr>
+                        <tr>
+                            <td>非課税・対象外小計</td>
+                            <td id="estNonTaxableSubtotalView" class="text-right">¥0</td>
+                        </tr>
+                        <tr>
+                            <td>合計 (税込)</td>
+                            <td id="estTotalView" class="text-right">¥0</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="notes-section">
+                    <label style="font-weight: bold; display: block; margin-bottom: 0.3rem;">備考・特記事項</label>
+                    <textarea id="estNotesContent">・振込手数料はご負担くださいますようお願い申し上げます。
+・ご不明な点がございましたらお気軽にお申し付けください。</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 2. 請求書タブ ================= -->
+        <div id="invoiceTab" class="tab-content">
+            <div class="urgent-warning-box no-print">
+                <h3>【重要】請求書を発行する前に必ず書き換えてください</h3>
+                <ul>
+                    <li><strong>請求番号（初期値：INV-001）：</strong> 新しい請求書を作るたびに数字を1つずつ増やしてください（例：1枚目 <code>INV-001</code> / 2枚目 <code>INV-002</code>）。</li>
+                    <li><strong>登録番号（初期値：T1234567890123）：</strong> ご自身の<strong>インボイス登録番号（T+13桁）</strong>に書き換えてください（免税事業者の場合は行ごと削除）。</li>
+                    <li><strong>発行日・お支払い期限：</strong> 発行日の日付は自動で入りますが、お支払い期限は必要に応じて変更してください。</li>
+                </ul>
+            </div>
+
+            <div class="guide-box no-print">
+                <strong>請求書作成のポイント:</strong> 請求金額、お支払い期限、お振込先情報などを自由に書き換えてご活用ください。
+            </div>
+
+            <div id="printAreaInvoice" class="document-sheet">
+                <div class="doc-title">御 請 求 書</div>
+
+                <div class="doc-header-info">
+                    <div class="client-info">
+                        <input type="text" id="invClientName" value="〇〇株式会社 御中" placeholder="宛先（クライアント名）">
+                        <p style="font-size: 0.85rem; color: #64748b; margin: 0.3rem 0 0 0;">下記の通りご請求申し上げます。</p>
+                    </div>
+                    <div class="company-info">
+                        <div><input type="text" id="invIssueDate" value=""></div>
+                        <div><input type="text" id="invNo" value="請求番号: INV-001"></div>
+                        <div style="margin-top: 0.5rem; font-weight: bold;"><input type="text" id="invMyCompanyName" value="あなたの会社名 / 屋号"></div>
+                        <div><input type="text" id="invMyAddress" value="東京都〇〇区〇〇 1-2-3"></div>
+                        <div><input type="text" id="invMyRegNumber" value="登録番号: T1234567890123 (インボイス)"></div>
+                    </div>
+                </div>
+
+                <div class="doc-meta">
+                    <div class="meta-group">
+                        <label style="font-size: 0.8rem; color: #64748b;">ご請求金額（税込合計）</label>
+                        <div id="headerTotalView" style="font-size: 1.25rem; font-weight: bold; color: var(--primary-color); padding-top: 0.2rem;">¥0</div>
+                    </div>
+                    <div class="meta-group">
+                        <label style="font-size: 0.8rem; color: #64748b;">お支払い期限</label>
+                        <input type="text" id="invLimit" value="2026年12月31日" style="width: 150px;">
+                    </div>
+                </div>
+
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">摘要（品名・内容）</th>
+                            <th style="width: 8%;">数量</th>
+                            <th style="width: 8%;">単位</th>
+                            <th style="width: 15%;">単価 (円)</th>
+                            <th style="width: 14%;">金額 (円)</th>
+                            <th style="width: 10%;" class="no-print">対象外</th>
+                            <th class="no-print" style="width: 5%;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invItemsBody">
+                        <!-- 動的生成 -->
+                    </tbody>
+                </table>
+
+                <div class="no-print" style="margin-bottom: 2rem;">
+                    <button class="btn" onclick="addItem('invoice')">＋ 明細行を追加</button>
+                </div>
+
+                <div class="total-section">
+                    <table class="total-table">
+                        <tr>
+                            <td id="invTaxableSubtotalLabel">対象小計 (税抜)</td>
+                            <td id="invSubtotalView" class="text-right">¥0</td>
+                        </tr>
+                        <tr>
+                            <td id="invTaxLabel">消費税 (10%)</td>
+                            <td id="invTaxView" class="text-right">¥0</td>
+                        </tr>
+                        <tr>
+                            <td>非課税・対象外小計</td>
+                            <td id="invNonTaxableSubtotalView" class="text-right">¥0</td>
+                        </tr>
+                        <tr>
+                            <td>ご請求金額 (税込)</td>
+                            <td id="invTotalView" class="text-right">¥0</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="notes-section">
+                    <label style="font-weight: bold; display: block; margin-bottom: 0.3rem;">お振込先・備考</label>
+                    <textarea id="invNotesContent">【お振込先】〇〇銀行 〇〇支店 普通 1234567 〇〇〇〇
+※振込手数料はご負担くださいますようお願い申し上げます。</textarea>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // ページ読み込み時に当日の日付を自動セット
+        function initCurrentDate() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = today.getMonth() + 1;
+            const day = today.getDate();
+            const dateStr = `発行日: ${year}年${month}月${day}日`;
+            
+            document.getElementById('estIssueDate').value = dateStr;
+            document.getElementById('invIssueDate').value = dateStr;
+        }
+
+        // それぞれ独立した明細データ
+        let estItems = [
+            { id: 1, name: 'ホームページデザイン制作', qty: 1, unit: '式', price: 150000, nonTaxable: false },
+            { id: 2, name: 'フロントエンドコーディング', qty: 1, unit: '式', price: 100000, nonTaxable: false },
+            { id: 3, name: '保守・運用サポート (初月)', qty: 1, unit: '月', price: 10000, nonTaxable: false }
+        ];
+
+        let invItems = [
+            { id: 1, name: 'ホームページデザイン制作', qty: 1, unit: '式', price: 150000, nonTaxable: false },
+            { id: 2, name: 'フロントエンドコーディング', qty: 1, unit: '式', price: 100000, nonTaxable: false },
+            { id: 3, name: '保守・運用サポート (11月分)', qty: 1, unit: '月', price: 10000, nonTaxable: false }
+        ];
+
+        let currentTab = 'estimate'; // 'estimate' or 'invoice'
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            const buttons = document.querySelectorAll('.tab-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+
+            const contents = document.querySelectorAll('.tab-content');
+            contents.forEach(content => content.classList.remove('active'));
+
+            if (tabName === 'estimate') {
+                buttons[0].classList.add('active');
+                document.getElementById('estimateTab').classList.add('active');
+            } else {
+                buttons[1].classList.add('active');
+                document.getElementById('invoiceTab').classList.add('active');
+            }
+        }
+
+        function renderAll() {
+            renderTable('estimate');
+            renderTable('invoice');
+        }
+
+        function renderTable(type) {
+            const isEst = (type === 'estimate');
+            const items = isEst ? estItems : invItems;
+            const tbodyId = isEst ? 'estItemsBody' : 'invItemsBody';
+            const tbody = document.getElementById(tbodyId);
+            tbody.innerHTML = '';
+
+            const taxRate = parseFloat(document.getElementById('globalTaxRate').value) || 0;
+            let taxableSubtotal = 0;
+            let nonTaxableSubtotal = 0;
+
+            items.forEach((item) => {
+                const amount = (item.qty || 0) * (item.price || 0);
+                if (item.nonTaxable) {
+                    nonTaxableSubtotal += amount;
+                } else {
+                    taxableSubtotal += amount;
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="text" value="${item.name}" oninput="updateItem('${type}', ${item.id}, 'name', this.value)" placeholder="品名や内容を入力"></td>
+                    <td class="text-center"><input type="number" value="${item.qty}" oninput="updateItem('${type}', ${item.id}, 'qty', this.value)" min="0"></td>
+                    <td class="text-center"><input type="text" value="${item.unit}" oninput="updateItem('${type}', ${item.id}, 'unit', this.value)" style="text-align: center;"></td>
+                    <td class="text-right"><input type="number" value="${item.price}" oninput="updateItem('${type}', ${item.id}, 'price', this.value)" min="0"></td>
+                    <td class="text-right" style="padding-right: 0.6rem; vertical-align: middle;">¥${amount.toLocaleString()}</td>
+                    <td class="text-center no-print"><input type="checkbox" ${item.nonTaxable ? 'checked' : ''} onchange="updateItem('${type}', ${item.id}, 'nonTaxable', this.checked)" title="非課税・対象外の場合はチェック"></td>
+                    <td class="text-center no-print"><button class="btn btn-danger" onclick="removeItem('${type}', ${item.id})">削除</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const tax = Math.floor(taxableSubtotal * (taxRate / 100));
+            const total = taxableSubtotal + nonTaxableSubtotal + tax;
+
+            if (isEst) {
+                document.getElementById('estTaxableSubtotalLabel').innerText = `対象小計 (税抜 ${taxRate}%)`;
+                document.getElementById('estTaxLabel').innerText = `消費税 (${taxRate}%)`;
+                document.getElementById('estSubtotalView').innerText = `¥${taxableSubtotal.toLocaleString()}`;
+                document.getElementById('estTaxView').innerText = `¥${tax.toLocaleString()}`;
+                document.getElementById('estNonTaxableSubtotalView').innerText = `¥${nonTaxableSubtotal.toLocaleString()}`;
+                document.getElementById('estTotalView').innerText = `¥${total.toLocaleString()}`;
+            } else {
+                document.getElementById('invTaxableSubtotalLabel').innerText = `対象小計 (税抜 ${taxRate}%)`;
+                document.getElementById('invTaxLabel').innerText = `消費税 (${taxRate}%)`;
+                document.getElementById('invSubtotalView').innerText = `¥${taxableSubtotal.toLocaleString()}`;
+                document.getElementById('invTaxView').innerText = `¥${tax.toLocaleString()}`;
+                document.getElementById('invNonTaxableSubtotalView').innerText = `¥${nonTaxableSubtotal.toLocaleString()}`;
+                document.getElementById('invTotalView').innerText = `¥${total.toLocaleString()}`;
+                document.getElementById('headerTotalView').innerText = `¥${total.toLocaleString()}`;
+            }
+        }
+
+        function addItem(type) {
+            const newItem = {
+                id: Date.now(),
+                name: '',
+                qty: 1,
+                unit: '式',
+                price: 0,
+                nonTaxable: false
+            };
+            if (type === 'estimate') {
+                estItems.push(newItem);
+            } else {
+                invItems.push(newItem);
+            }
+            renderTable(type);
+        }
+
+        function removeItem(type, id) {
+            if (type === 'estimate') {
+                estItems = estItems.filter(i => i.id !== id);
+            } else {
+                invItems = invItems.filter(i => i.id !== id);
+            }
+            renderTable(type);
+        }
+
+        function updateItem(type, id, field, value) {
+            const items = (type === 'estimate') ? estItems : invItems;
+            const item = items.find(i => i.id === id);
+            if (item) {
+                if (field === 'qty' || field === 'price') {
+                    item[field] = value === '' ? 0 : Number(value);
+                } else {
+                    item[field] = value;
+                }
+                renderTable(type);
+            }
+        }
+
+        function exportJSON() {
+            const data = {
+                globalTaxRate: document.getElementById('globalTaxRate').value,
+                estimate: {
+                    clientName: document.getElementById('estClientName').value,
+                    issueDate: document.getElementById('estIssueDate').value,
+                    estNo: document.getElementById('estNo').value,
+                    myCompanyName: document.getElementById('estMyCompanyName').value,
+                    myAddress: document.getElementById('estMyAddress').value,
+                    myRegNumber: document.getElementById('estMyRegNumber').value,
+                    estSubject: document.getElementById('estSubject').value,
+                    estValid: document.getElementById('estValid').value,
+                    estTerm: document.getElementById('estTerm').value,
+                    notesContent: document.getElementById('estNotesContent').value,
+                    items: estItems
+                },
+                invoice: {
+                    clientName: document.getElementById('invClientName').value,
+                    issueDate: document.getElementById('invIssueDate').value,
+                    invNo: document.getElementById('invNo').value,
+                    myCompanyName: document.getElementById('invMyCompanyName').value,
+                    myAddress: document.getElementById('invMyAddress').value,
+                    myRegNumber: document.getElementById('invMyRegNumber').value,
+                    invLimit: document.getElementById('invLimit').value,
+                    notesContent: document.getElementById('invNotesContent').value,
+                    items: invItems
+                }
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'document_tool_backup.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importJSON(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.globalTaxRate !== undefined) document.getElementById('globalTaxRate').value = data.globalTaxRate;
+                    
+                    if (data.estimate) {
+                        const est = data.estimate;
+                        if (est.clientName) document.getElementById('estClientName').value = est.clientName;
+                        if (est.issueDate) document.getElementById('estIssueDate').value = est.issueDate;
+                        if (est.estNo) document.getElementById('estNo').value = est.estNo;
+                        if (est.myCompanyName) document.getElementById('estMyCompanyName').value = est.myCompanyName;
+                        if (est.myAddress) document.getElementById('estMyAddress').value = est.myAddress;
+                        if (est.myRegNumber) document.getElementById('estMyRegNumber').value = est.myRegNumber;
+                        if (est.estSubject) document.getElementById('estSubject').value = est.estSubject;
+                        if (est.estValid) document.getElementById('estValid').value = est.estValid;
+                        if (est.estTerm) document.getElementById('estTerm').value = est.estTerm;
+                        if (est.notesContent) document.getElementById('estNotesContent').value = est.notesContent;
+                        if (est.items) estItems = est.items;
+                    }
+
+                    if (data.invoice) {
+                        const inv = data.invoice;
+                        if (inv.clientName) document.getElementById('invClientName').value = inv.clientName;
+                        if (inv.issueDate) document.getElementById('invIssueDate').value = inv.issueDate;
+                        if (inv.invNo) document.getElementById('invNo').value = inv.invNo;
+                        if (inv.myCompanyName) document.getElementById('invMyCompanyName').value = inv.myCompanyName;
+                        if (inv.myAddress) document.getElementById('invMyAddress').value = inv.myAddress;
+                        if (inv.myRegNumber) document.getElementById('invMyRegNumber').value = inv.myRegNumber;
+                        if (inv.invLimit) document.getElementById('invLimit').value = inv.invLimit;
+                        if (inv.notesContent) document.getElementById('invNotesContent').value = inv.notesContent;
+                        if (inv.items) invItems = inv.items;
+                    }
+
+                    renderAll();
+                    alert('復元しました！');
+                } catch(err) {
+                    alert('ファイルの読み込みに失敗しました。');
+                }
+                input.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        function saveAsImage() {
+            const targetId = (currentTab === 'estimate') ? 'printArea' : 'printAreaInvoice';
+            const filename = (currentTab === 'estimate') ? 'estimate.png' : 'invoice.png';
+            html2canvas(document.getElementById(targetId), { scale: 2 }).then(canvas => {
+                const a = document.createElement('a');
+                a.download = filename;
+                a.href = canvas.toDataURL('image/png');
+                a.click();
+            });
+        }
+
+        // 初期実行
+        initCurrentDate();
+        renderAll();
+    </script>
+</body>
+</html>
